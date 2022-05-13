@@ -3,29 +3,46 @@
 -- Project : proj2, COMP90048
 -- Purpose : Implement the guessing and answering parts of a logical guess game.
 
+
+-- | This file implements some parts of a guess game in which there is a hider
+-- and a guesser. The hider hides 3 ships in 3 different locations on a 4×8
+-- grid while the gueeser needs to guess the exact locations of the ships. The
+-- guesser keeps guessing based on the feedback of the previous guess. The 
+-- program needs to implement both the guessing part and the feedback part. And
+-- the guesser in the program needs to find all the hidden ships as fewer number
+-- of guesses as possible. To achieve that goal, the number of possible targets
+-- will be reduced based on the feedback from previous guess and the next guess
+-- which has the highest possibility to get the answer will be made after some
+-- calculations.
+
+
 module Proj2 (Location, toLocation, fromLocation, feedback,
              GameState, initialGuess, nextGuess) where
-             
+
+
 import Data.List
 import Data.Char (ord)
 import Data.Map (fromListWith, toList)
 
 
--- some pre-defined types
+-- | some pre-defined types
 type Feedback = (Int, Int, Int)
 type TargetFb = ([Location], Feedback)
--- Store remaining targets and their expected feedbacks(based on the guess)
+-- | Store remaining targets and their expected feedbacks(based on the guess).
 type GameState = [TargetFb]
 
 
+-- | Location type is defined here. The first Char type indicates which column
+-- the location is in while the second char type indicates which row the location
+-- is in. e.g. Location 'A' '1' just simply represents A1.
 data Location = Location Char Char
     deriving (Show, Eq)
 
 
 -- | The initial guess is defined here.
--- We can actually get the initial guess based on the takeGuess function written 
--- below. However, to reduce the time of calculaion, I just put the result directly
--- in this program.
+-- We can actually get the initial guess based on the takeGuess function 
+-- written below. However, to reduce the time of calculaion, I just put the 
+-- result directly in this program.
 initLocs :: [Location]
 initLocs = [(Location 'A' '1'), (Location 'H' '1'), (Location 'H' '4')]
 
@@ -37,21 +54,27 @@ subsets _ [] = []
 subsets n (x : xs) = map (x :) (subsets (n - 1) xs) ++ subsets n xs
 
 
+-- | Take the column of Char type as input and check if the column information 
+-- given is valid.
 isColValid :: Char -> Bool
 isColValid c = c >= 'A' && c <= 'H'
 
+
+-- | Take the row of Char type as input and Check if the row information given 
+-- is valid.
 isRowValid :: Char -> Bool
 isRowValid r = r >= '1' && r <= '4'
 
 
--- | Check if one ship is away from the other ship in a given range.
+-- | Check if one ship(the second argument) is away from the other ship
+-- (the third argument) in a given range(the first argument).
 inRange :: Int -> Location -> Location -> Bool
-inRange dist (Location tc tr) (Location gc gr)
-    | abs (ord tc - ord gc) <= dist && abs (ord tr - ord gr) <= dist = True
-    | otherwise = False
+inRange dist (Location tc tr) (Location gc gr) =
+    abs (ord tc - ord gc) <= dist && abs (ord tr - ord gr) <= dist 
 
 
--- | Check if one of the guesses is away from any of the target ships in a given range.
+-- | Check if one of the guesses is away from any of the target ships in a given 
+-- range.
 inRangeOfTargets :: Int -> [Location] -> Location -> Bool
 inRangeOfTargets _ [] _ = False
 inRangeOfTargets dist (x:xs) guessLoc
@@ -83,46 +106,50 @@ allLoc = [(Location col row) | col <- cols, row <- rows] where
     rows = ['1', '2', '3', '4']
 
 
--- | Add feedback to a target.
+-- | Given a target(first argument) and a guess(second argument), add feedback 
+-- to the target and return a turple of the target and its feedback
 addFbToTarget :: [Location] -> [Location] -> TargetFb
 addFbToTarget target guess = (target, (feedback target guess)) 
 
 
 -- | Take all the targets from the GameState.
--- | The game state includes all the remaining targets and their expected feedbacks,
--- and we may only need targets and do not care about feedback information sometimes.
+-- | The game state includes all the remaining targets and their expected 
+-- feedbacks, and we may only need targets and do not care about feedback 
+-- information sometimes.
 takeTargets :: GameState -> [[Location]]
 takeTargets gameState = [target | (target, _) <- gameState]
 
 
--- | Remove the inconsistent targets in the GameState based on 
--- the feedback from the last guess.
+-- | Remove the inconsistent targets in the GameState based on the feedback from 
+-- the last guess. Take the previous game state and the feedback as inputs and
+-- return the new game state.
 removeInconsistentEle :: GameState -> Feedback -> GameState
 removeInconsistentEle gameState feedback = 
     filter (\(_, y) -> y == feedback) gameState
 
 
--- | For one possible guess, get the feedback set from all possible targets.
+-- | For one possible guess(the first argument), get the feedback set from all 
+-- possible targets(the second argument).
 feedbackSet :: [Location] -> [[Location]] -> [TargetFb]
 feedbackSet guess allTargets = 
     [addFbToTarget possibleTarget guess | possibleTarget <- allTargets]
 
 
--- | Get the numbers of occurrences of different target's feedbacks
+-- | Get the numbers of occurrences of different target's feedbacks.
 frequency :: [TargetFb] -> [(Feedback, Int)]
 frequency xs = toList (fromListWith (+) [(x, 1) | (_, x) <- xs])
 
 
--- | Get the numebr of expected remaining candidates of one possible guessing target
--- based on the numbers of occurrences of target's feedback(the second argument) and
--- the total number of feedback set(the first argument).
+-- | Get the numebr of expected remaining candidates of one possible guessing 
+-- target based on the numbers of occurrences of target's feedback(the second 
+-- argument) and the total number of feedback set(the first argument).
 expectedNum :: Int -> [(Feedback, Int)] -> Float
 expectedNum total xs = (fromIntegral v) / (fromIntegral total)
     where v = sum (map (^2) [x | (_, x) <- xs])
 
 
--- | Get the number of expected remaining candidates of one possible guessing target
--- (the first argument) based on the remaining targets(the second argument). 
+-- | Get the number of expected remaining candidates of one possible guessing 
+-- target (the first argument) based on the remaining targets(the second argument). 
 mapExpectedNum :: [Location] -> [[Location]] -> ([Location], Float)
 mapExpectedNum target allTargets =
     (target, expectedNum (length allTargets) freqList) where
@@ -135,8 +162,8 @@ takeGuess allTargets =
     minValueTarget (map (\target -> mapExpectedNum target allTargets) allTargets) 
     
     
--- | Get the target with minimum expected number from all the remaining candidates 
--- as the next guess.
+-- | Get the target with minimum expected number from all the remaining 
+-- candidates as the next guess.
 minValueTarget :: [([Location], Float)] -> [Location]
 minValueTarget [(target, _)] = target
 minValueTarget ((targetX, valX):(targetY, valY):xs)
@@ -145,7 +172,7 @@ minValueTarget ((targetX, valX):(targetY, valY):xs)
    
 
 -- ------------------------------------------------------------
--- Below is the functions that must be defined in this project.
+-- Below are the functions that must be defined in this project.
 
 -- | Gives Just the Location named by the string, or Nothing if the string 
 -- is not a valid location name.
@@ -161,8 +188,8 @@ fromLocation :: Location -> String
 fromLocation (Location c r) = [c] ++ [r]
 
 
--- | Take a target(the first argument) and a guess(the second argument), and returns
--- the feedback of the guess.
+-- | Take a target(the first argument) and a guess(the second argument), and 
+-- returns the feedback of the guess.
 feedback :: [Location] -> [Location] -> Feedback
 feedback _ [] = (0, 0, 0)
 feedback targetLocs (x:xs) = (a + a', b + b', c + c') where 
@@ -182,5 +209,8 @@ nextGuess (_, gs) feedback =
     (guess, feedbackSet guess candidates) where
     guess = takeGuess candidates
     candidates = takeTargets (removeInconsistentEle gs feedback) 
-    
-    
+        
+
+
+
+
